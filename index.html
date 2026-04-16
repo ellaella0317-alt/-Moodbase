@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>情緒基地 v8 - Firebase 穩定版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F0F0F0; overflow-x: hidden; }
+        .hidden { display: none !important; }
+        .patchwork { position: absolute; inset: 0; z-index: 0; }
+        .shape-flat { position: absolute; opacity: 0.8; transition: all 1s ease; }
+        .rain { position: absolute; width: 1.5px; height: 15px; background: rgba(255,255,255,0.6); top: -20px; animation: fall 0.8s linear infinite; z-index: 10; }
+        @keyframes fall { to { transform: translateY(100vh); } }
+        .sun-ray { position: absolute; top: 0; right: 0; width: 100%; height: 100%; background: radial-gradient(circle at 90% 10%, rgba(255,255,200,0.3) 0%, transparent 60%); z-index: 5; animation: shine 3s infinite alternate; }
+        @keyframes shine { from { opacity: 0.3; } to { opacity: 0.6; } }
+        .msg-bubble { background-color: rgba(255, 255, 255, 0.95); border: 1px solid rgba(0,0,0,0.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .decor-item { transition: all 1s ease; opacity: 0; transform: translateY(20px); z-index: 15; }
+        .decor-show { opacity: 1; transform: translateY(0); }
+        
+        /* 保持 v8 原始按鈕縮放與活動狀態樣式 */
+        .mood-btn { transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .mood-active { transform: scale(1.4); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1)); }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div id="home-page" class="flex flex-col items-center p-6 max-w-md mx-auto">
+        <header class="mt-10 mb-6 text-center">
+            <h1 class="text-2xl tracking-[0.4em] font-light text-gray-600">情緒基地</h1>
+            <p class="text-[10px] mt-2 text-gray-400">今天的你，也值得被好好照顧</p>
+        </header>
+
+        <div class="w-full bg-white rounded-[2.5rem] p-8 shadow-sm space-y-6 border border-gray-100">
+            <input id="user-nickname" type="text" placeholder="輸入匿名暱稱" class="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm focus:ring-1 focus:ring-gray-200">
+
+            <div class="bg-gray-50 p-4 rounded-3xl text-center">
+                <p class="text-[10px] text-gray-400 mb-3 tracking-widest">今日心情簽到</p>
+                <div class="flex justify-around">
+                    <button onclick="setMood('tired')" id="m-tired" class="mood-btn text-2xl">😮‍💨</button>
+                    <button onclick="setMood('good')" id="m-good" class="mood-btn text-2xl">😊</button>
+                    <button onclick="setMood('calm')" id="m-calm" class="mood-btn text-2xl">☁️</button>
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <p class="text-[10px] font-bold text-gray-300 tracking-widest uppercase">Daily Tasks</p>
+                <div class="p-4 rounded-2xl border border-gray-50 bg-gray-50/30">
+                    <p class="text-xs text-gray-500 mb-2">任務 1：寫下今天覺得感謝的一件事</p>
+                    <button id="task1-btn" onclick="triggerTask(1)" class="w-full py-2 bg-[#91A3B0] text-white text-[10px] rounded-xl shadow-sm transition">點擊打卡領獎</button>
+                </div>
+                <div class="p-4 rounded-2xl border border-gray-50 bg-gray-50/30">
+                    <p class="text-xs text-gray-500 mb-2">任務 2：說一句鼓勵自己的話</p>
+                    <button id="task2-btn" onclick="triggerTask(2)" class="w-full py-2 bg-[#B784A7] text-white text-[10px] rounded-xl shadow-sm transition">點擊打卡領獎</button>
+                </div>
+            </div>
+
+            <div class="space-y-2 pt-2">
+                <button onclick="checkAndEnter('solo')" class="w-full py-4 bg-gray-100 rounded-2xl text-gray-600 text-sm">個人房間</button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="checkAndEnter('friends')" class="py-4 bg-gray-100 rounded-2xl text-gray-600 text-sm">好友房</button>
+                    <button onclick="checkAndEnter('match')" class="py-4 bg-[#A3B18A] text-white rounded-2xl text-[13px] shadow-sm">共鳴匹配</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="room-page" class="hidden min-h-screen flex flex-col relative overflow-hidden transition-all duration-1000">
+        <div id="bg-patchwork" class="patchwork"></div>
+        <div id="weather-layer" class="absolute inset-0 pointer-events-none z-10"></div>
+
+        <nav class="p-5 flex justify-between items-center text-white z-20 bg-black/10 backdrop-blur-md">
+            <button onclick="exitRoom()" class="text-xs opacity-80">✕ 返回</button>
+            <div class="text-center">
+                <h2 id="room-display-name" class="text-sm font-light tracking-widest">房間</h2>
+                <p id="user-display-name" class="text-[10px] opacity-70"></p>
+                <p id="room-id-tag" class="text-[7px] opacity-30"></p>
+            </div>
+            <button onclick="copyLink()" class="bg-white/20 px-3 py-1 rounded-full text-[10px]">邀請分享</button>
+        </nav>
+
+        <div id="ai-bubble" class="mx-6 mt-4 p-4 bg-white/10 backdrop-blur-md rounded-2xl text-white text-xs font-light z-20 text-center">正在感應情緒環境...</div>
+        
+        <div id="chat-content" class="flex-1 overflow-y-auto p-6 space-y-4 z-20"></div>
+
+        <div id="decor-1" class="decor-item absolute bottom-28 left-8 text-4xl">🪴</div>
+        <div id="decor-2" class="decor-item absolute bottom-28 right-12 text-3xl">🕯️</div>
+
+        <div class="p-6 z-20">
+            <div class="bg-white rounded-[2rem] p-2 flex items-center shadow-2xl">
+                <label class="px-3 cursor-pointer">🖼️<input type="file" class="hidden" onchange="uploadImg(this)"></label>
+                <input id="msg-input" type="text" placeholder="輸入訊息..." class="flex-1 bg-transparent border-none text-sm focus:ring-0">
+                <button onclick="pushMsg()" class="bg-gray-800 text-white px-5 py-2 rounded-full text-xs">送出</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        // 你提供的最新 Firebase 配置
+        const firebaseConfig = {
+            apiKey: "AIzaSyBE_KthL9aaKe33VXaJKXKGpc_MV8Pj5Ys",
+            authDomain: "mood-base-d5c89.firebaseapp.com",
+            databaseURL: "https://mood-base-d5c89-default-rtdb.firebaseio.com",
+            projectId: "mood-base-d5c89",
+            storageBucket: "mood-base-d5c89.firebasestorage.app",
+            messagingSenderId: "570461401684",
+            appId: "1:570461401684:web:a286095f0f5d09afaf73c1",
+            measurementId: "G-R30E9EHB1H"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let userData = { nickname: "", mood: "calm", task1: false, task2: false };
+        let currentRoomID = "";
+
+        // 初始化與暱稱記憶
+        window.addEventListener('load', () => {
+            const savedNick = localStorage.getItem('mood_base_nick');
+            if (savedNick) document.getElementById('user-nickname').value = savedNick;
+            setMood('calm'); // 預設
+        });
+
+        // 綁定到 window 使 HTML onclick 可調用
+        window.setMood = (m) => {
+            userData.mood = m;
+            document.querySelectorAll('.mood-btn').forEach(btn => btn.classList.remove('mood-active'));
+            document.getElementById('m-' + m).classList.add('mood-active');
+        };
+
+        window.triggerTask = (num) => {
+            let q = num === 1 ? "寫下今天覺得感謝的一件事..." : "說一句鼓勵自己的話...";
+            let ans = prompt(q);
+            if(ans && ans.trim()) {
+                if(num === 1) {
+                    userData.task1 = true;
+                    document.getElementById('task1-btn').innerText = "已領取：植物 🌱";
+                    document.getElementById('task1-btn').style.background = "#9CA3AF";
+                } else {
+                    userData.task2 = true;
+                    document.getElementById('task2-btn').innerText = "已領取：香氛 🕯️";
+                    document.getElementById('task2-btn').style.background = "#9CA3AF";
+                }
+            }
+        };
+
+        window.checkAndEnter = (mode, existingRoomID = null) => {
+            const nick = document.getElementById('user-nickname').value.trim();
+            if(!nick) { alert("請先輸入暱稱"); return; }
+            
+            localStorage.setItem('mood_base_nick', nick);
+            userData.nickname = nick;
+
+            // 情緒匹配邏輯：根據心情標籤分配大廳
+            if (existingRoomID) {
+                currentRoomID = existingRoomID;
+            } else {
+                if (mode === 'match') currentRoomID = "match-" + userData.mood;
+                else if (mode === 'solo') currentRoomID = "solo-" + Math.random().toString(36).substr(2, 6);
+                else currentRoomID = "room-" + Math.random().toString(36).substr(2, 6);
+            }
+
+            const newUrl = `${window.location.origin}${window.location.pathname}?mode=${mode}&room=${currentRoomID}`;
+            window.history.pushState({ path: newUrl }, '', newUrl);
+
+            document.getElementById('home-page').classList.add('hidden');
+            document.getElementById('room-page').classList.remove('hidden');
+            
+            updateVisuals(mode);
+            startChat();
+        };
+
+        function updateVisuals(mode) {
+            const bg = document.getElementById('bg-patchwork');
+            const weather = document.getElementById('weather-layer');
+            const ai = document.getElementById('ai-bubble');
+            
+            let colors = mode === 'solo' ? ['#91A3B0', '#778899'] : (mode === 'match' ? ['#A3B18A', '#588157'] : ['#B784A7', '#D4A5A5']);
+            bg.innerHTML = `<div class="shape-flat w-[120%] h-[60%] top-[-10%] left-[-10%] rotate-3" style="background-color: ${colors[0]}"></div>
+                            <div class="shape-flat w-[100%] h-[50%] bottom-0 right-0 -rotate-2" style="background-color: ${colors[1]}"></div>`;
+
+            weather.innerHTML = "";
+            if(userData.mood === 'tired') {
+                for(let i=0; i<30; i++) {
+                    let d = document.createElement('div'); d.className='rain';
+                    d.style.left = Math.random()*100+'vw'; d.style.animationDelay = Math.random()+'s';
+                    weather.appendChild(d);
+                }
+                ai.innerText = "這裡正在下療癒的小雨。";
+            } else if(userData.mood === 'good') {
+                weather.innerHTML = '<div class="sun-ray"></div>';
+                ai.innerText = "陽光灑在牆上，感覺很溫暖。";
+            } else {
+                ai.innerText = "平靜的白雲，適合慢慢聊天。";
+            }
+
+            document.getElementById('room-display-name').innerText = mode==='match'?"共鳴房間":mode==='solo'?"獨處房間":"好友聚會";
+            document.getElementById('user-display-name').innerText = "@" + userData.nickname;
+            document.getElementById('room-id-tag').innerText = "ID: " + currentRoomID;
+            
+            if(userData.task1) document.getElementById('decor-1').classList.add('decor-show');
+            if(userData.task2) document.getElementById('decor-2').classList.add('decor-show');
+        }
+
+        function startChat() {
+            const box = document.getElementById('chat-content');
+            box.innerHTML = "";
+            const roomRef = ref(db, 'chats_stable/' + currentRoomID);
+
+            onChildAdded(roomRef, (snap) => {
+                const data = snap.val();
+                const isMe = data.user === userData.nickname;
+                const div = document.createElement('div');
+                div.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
+                div.innerHTML = `<div class="max-w-[85%]"><p class="text-[9px] text-white/50 mb-1 ${isMe?'text-right':''}">${data.user}</p>
+                                 <div class="msg-bubble rounded-2xl px-4 py-2 text-sm text-gray-800">${data.content}</div></div>`;
+                box.appendChild(div);
+                box.scrollTop = box.scrollHeight;
+            });
+        }
+
+        window.pushMsg = () => {
+            const input = document.getElementById('msg-input');
+            if(!input.value.trim()) return;
+            push(ref(db, 'chats_stable/' + currentRoomID), {
+                user: userData.nickname,
+                content: input.value,
+                time: serverTimestamp()
+            });
+            input.value = "";
+        };
+
+        window.uploadImg = (el) => {
+            if (!el.files[0]) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                push(ref(db, 'chats_stable/' + currentRoomID), {
+                    user: userData.nickname,
+                    content: `<img src="${e.target.result}" class="rounded-xl">`,
+                    time: serverTimestamp()
+                });
+            };
+            reader.readAsDataURL(el.files[0]);
+        };
+
+        window.exitRoom = () => {
+            window.history.pushState({}, '', window.location.pathname);
+            location.reload();
+        };
+
+        window.copyLink = () => {
+            navigator.clipboard.writeText(window.location.href).then(() => alert("連結已複製 ✨"));
+        };
+
+        // 偵測分享連結自動進入
+        const urlParams = new URLSearchParams(window.location.search);
+        const m = urlParams.get('mode');
+        const r = urlParams.get('room');
+        if(m && r) {
+            setTimeout(() => {
+                if(!document.getElementById('user-nickname').value) 
+                    document.getElementById('user-nickname').value = "旅人" + Math.floor(Math.random()*1000);
+                checkAndEnter(m, r);
+            }, 800);
+        }
+    </script>
+</body>
+</html>
