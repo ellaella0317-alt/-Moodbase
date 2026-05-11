@@ -3,104 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>情緒基地 v8 - Firebase 穩定版</title>
+    <title>情緒基地 - 專業版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F0F0F0; overflow-x: hidden; }
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #F8F9FA; color: #4A4A4A; }
         .hidden { display: none !important; }
-        .patchwork { position: absolute; inset: 0; z-index: 0; }
-        .shape-flat { position: absolute; opacity: 0.8; transition: all 1s ease; }
-        .rain { position: absolute; width: 1.5px; height: 15px; background: rgba(255,255,255,0.6); top: -20px; animation: fall 0.8s linear infinite; z-index: 10; }
-        @keyframes fall { to { transform: translateY(100vh); } }
-        .sun-ray { position: absolute; top: 0; right: 0; width: 100%; height: 100%; background: radial-gradient(circle at 90% 10%, rgba(255,255,200,0.3) 0%, transparent 60%); z-index: 5; animation: shine 3s infinite alternate; }
-        @keyframes shine { from { opacity: 0.3; } to { opacity: 0.6; } }
-        .msg-bubble { background-color: rgba(255, 255, 255, 0.95); border: 1px solid rgba(0,0,0,0.05); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .decor-item { transition: all 1s ease; opacity: 0; transform: translateY(20px); z-index: 15; }
-        .decor-show { opacity: 1; transform: translateY(0); }
-        
-        /* 保持 v8 原始按鈕縮放與活動狀態樣式 */
-        .mood-btn { transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        .mood-active { transform: scale(1.4); filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1)); }
+        .mood-btn { transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); filter: grayscale(0.5); opacity: 0.6; }
+        .mood-active { transform: scale(1.3); filter: grayscale(0); opacity: 1; border: 2px solid #A3B18A; border-radius: 50%; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .calendar-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 10px; border-radius: 8px; background: #FFF; border: 1px solid #F0F0F0; }
+        .shop-item { transition: transform 0.2s; border: 1px solid #EEE; border-radius: 1rem; padding: 10px; text-align: center; }
+        .shop-item:hover { transform: translateY(-5px); border-color: #A3B18A; }
+        .patchwork { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+        .shape { position: absolute; opacity: 0.7; transition: all 1s ease; border-radius: 2rem; }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="max-w-md mx-auto min-h-screen bg-gray-50 shadow-xl overflow-x-hidden">
 
-    <div id="home-page" class="flex flex-col items-center p-6 max-w-md mx-auto">
-        <header class="mt-10 mb-6 text-center">
-            <h1 class="text-2xl tracking-[0.4em] font-light text-gray-600">情緒基地</h1>
-            <p class="text-[10px] mt-2 text-gray-400">今天的你，也值得被好好照顧</p>
+    <!-- 1. 暱稱設定頁 (初次進入) -->
+    <div id="setup-page" class="p-8 pt-20 flex flex-col items-center hidden">
+        <h1 class="text-2xl font-light mb-8 tracking-widest text-[#91A3B0]">給自己一個名字</h1>
+        <div class="w-full bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
+            <input id="init-nick" type="text" placeholder="輸入後不可更改..." class="w-full bg-gray-50 border-none rounded-xl p-4 text-center text-sm">
+            <button onclick="confirmNickname()" class="w-full mt-4 py-4 bg-[#91A3B0] text-white rounded-xl text-sm">確認身份</button>
+        </div>
+    </div>
+
+    <!-- 2. 主頁面 -->
+    <div id="home-page" class="p-6 pb-24 space-y-6 hidden">
+        <header class="flex justify-between items-center">
+            <div>
+                <p id="display-date" class="text-[10px] text-gray-400 font-medium"></p>
+                <h1 id="welcome-msg" class="text-xl font-medium text-gray-700">你好</h1>
+            </div>
+            <div class="bg-amber-100 px-3 py-1 rounded-full text-amber-600 text-xs font-bold">🪙 <span id="coin-balance">0</span></div>
         </header>
 
-        <div class="w-full bg-white rounded-[2.5rem] p-8 shadow-sm space-y-6 border border-gray-100">
-            <input id="user-nickname" type="text" placeholder="輸入匿名暱稱" class="w-full bg-gray-50 border-none rounded-2xl p-4 text-sm focus:ring-1 focus:ring-gray-200">
-
-            <div class="bg-gray-50 p-4 rounded-3xl text-center">
-                <p class="text-[10px] text-gray-400 mb-3 tracking-widest">今日心情簽到</p>
-                <div class="flex justify-around">
-                    <button onclick="setMood('tired')" id="m-tired" class="mood-btn text-2xl">😮‍💨</button>
-                    <button onclick="setMood('good')" id="m-good" class="mood-btn text-2xl">😊</button>
-                    <button onclick="setMood('calm')" id="m-calm" class="mood-btn text-2xl">☁️</button>
-                </div>
+        <!-- 心情簽到 -->
+        <section class="bg-white p-6 rounded-[2.5rem] shadow-sm">
+            <p class="text-[10px] text-center text-gray-400 mb-4 tracking-widest uppercase">Today's Mood</p>
+            <div class="flex justify-around items-center" id="mood-selector">
+                <button onclick="selectMood('good', '😊')" id="btn-good" class="mood-btn text-3xl">😊</button>
+                <button onclick="selectMood('calm', '☁️')" id="btn-calm" class="mood-btn text-3xl">☁️</button>
+                <button onclick="selectMood('tired', '😮‍💨')" id="btn-tired" class="mood-btn text-3xl">😮‍💨</button>
+                <button onclick="selectMood('anxious', '😰')" id="btn-anxious" class="mood-btn text-3xl">😰</button>
+                <button onclick="selectMood('angry', '😡')" id="btn-angry" class="mood-btn text-3xl">😡</button>
             </div>
+            <p id="mood-feedback" class="text-center text-[11px] text-gray-500 mt-4 italic"></p>
+            <button id="mood-lock-btn" onclick="lockMood()" class="w-full mt-4 py-2 bg-gray-100 text-gray-400 text-[10px] rounded-lg tracking-widest">鎖定今日心情</button>
+        </section>
 
-            <div class="space-y-3">
-                <p class="text-[10px] font-bold text-gray-300 tracking-widest uppercase">Daily Tasks</p>
-                <div class="p-4 rounded-2xl border border-gray-50 bg-gray-50/30">
-                    <p class="text-xs text-gray-500 mb-2">任務 1：寫下今天覺得感謝的一件事</p>
-                    <button id="task1-btn" onclick="triggerTask(1)" class="w-full py-2 bg-[#91A3B0] text-white text-[10px] rounded-xl shadow-sm transition">點擊打卡領獎</button>
-                </div>
-                <div class="p-4 rounded-2xl border border-gray-50 bg-gray-50/30">
-                    <p class="text-xs text-gray-500 mb-2">任務 2：說一句鼓勵自己的話</p>
-                    <button id="task2-btn" onclick="triggerTask(2)" class="w-full py-2 bg-[#B784A7] text-white text-[10px] rounded-xl shadow-sm transition">點擊打卡領獎</button>
-                </div>
+        <!-- 每日任務 -->
+        <section class="grid grid-cols-2 gap-3">
+            <div class="bg-[#91A3B0]/10 p-4 rounded-3xl border border-[#91A3B0]/20">
+                <p class="text-[9px] text-[#91A3B0] mb-1 font-bold">TASK 01</p>
+                <p class="text-[11px] mb-3 h-8">深呼吸三次</p>
+                <button id="task1-btn" onclick="doTask(1)" class="w-full py-1 bg-white text-[#91A3B0] text-[10px] rounded-full shadow-sm">領取 10🪙</button>
             </div>
+            <div class="bg-[#B784A7]/10 p-4 rounded-3xl border border-[#B784A7]/20">
+                <p class="text-[9px] text-[#B784A7] mb-1 font-bold">TASK 02</p>
+                <p class="text-[11px] mb-3 h-8">喝一杯溫水</p>
+                <button id="task2-btn" onclick="doTask(2)" class="w-full py-1 bg-white text-[#B784A7] text-[10px] rounded-full shadow-sm">領取 10🪙</button>
+            </div>
+        </section>
 
-            <div class="space-y-2 pt-2">
-                <button onclick="checkAndEnter('solo')" class="w-full py-4 bg-gray-100 rounded-2xl text-gray-600 text-sm">個人房間</button>
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="checkAndEnter('friends')" class="py-4 bg-gray-100 rounded-2xl text-gray-600 text-sm">好友房</button>
-                    <button onclick="checkAndEnter('match')" class="py-4 bg-[#A3B18A] text-white rounded-2xl text-[13px] shadow-sm">共鳴匹配</button>
+        <!-- 導覽功能 -->
+        <div class="grid grid-cols-2 gap-3">
+            <button onclick="openFriendRoomNav()" class="py-5 bg-white rounded-3xl text-sm text-gray-600 shadow-sm">朋友房間</button>
+            <button onclick="enterMatchRoom()" class="py-5 bg-[#A3B18A] rounded-3xl text-sm text-white shadow-sm">共鳴匹配</button>
+            <button onclick="openShop()" class="py-4 bg-amber-50 rounded-3xl text-sm text-amber-700 shadow-sm border border-amber-100">🛒 佈置商店</button>
+            <button onclick="checkInDiary()" class="py-4 bg-blue-50 rounded-3xl text-sm text-blue-700 shadow-sm border border-blue-100">📅 成長日誌</button>
+        </div>
+    </div>
+
+    <!-- 3. 商店頁面 -->
+    <div id="shop-page" class="p-6 pb-24 hidden">
+        <nav class="flex justify-between items-center mb-6">
+            <button onclick="goBack()" class="text-xs text-gray-400">✕ 關閉商店</button>
+            <div class="bg-amber-100 px-3 py-1 rounded-full text-amber-600 text-xs font-bold">🪙 <span id="shop-coin-balance">0</span></div>
+        </nav>
+        <h2 class="text-lg mb-4 font-medium">裝飾小店</h2>
+        <div id="shop-grid" class="grid grid-cols-3 gap-3 overflow-y-auto max-h-[60vh]">
+            <!-- 商店內容由 JS 產生 -->
+        </div>
+    </div>
+
+    <!-- 4. 好友房導航頁 -->
+    <div id="friend-nav-page" class="p-6 hidden">
+        <button onclick="goBack()" class="mb-6 text-xs text-gray-400">✕ 返回</button>
+        <div class="space-y-6">
+            <div class="bg-white p-6 rounded-[2.5rem]">
+                <h3 class="text-sm font-medium mb-4">創建新空間</h3>
+                <input id="new-room-name" type="text" placeholder="給房間起個名字..." class="w-full bg-gray-50 border-none rounded-xl p-3 text-sm mb-2">
+                <button onclick="createRoom()" class="w-full py-3 bg-[#91A3B0] text-white rounded-xl text-xs">開啟新房間</button>
+            </div>
+            <div class="bg-white p-6 rounded-[2.5rem]">
+                <h3 class="text-sm font-medium mb-4">過往紀錄</h3>
+                <div id="history-rooms" class="space-y-2 max-h-60 overflow-y-auto text-xs text-gray-500">
+                    <!-- 歷史紀錄 -->
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="room-page" class="hidden min-h-screen flex flex-col relative overflow-hidden transition-all duration-1000">
-        <div id="bg-patchwork" class="patchwork"></div>
-        <div id="weather-layer" class="absolute inset-0 pointer-events-none z-10"></div>
-
-        <nav class="p-5 flex justify-between items-center text-white z-20 bg-black/10 backdrop-blur-md">
-            <button onclick="exitRoom()" class="text-xs opacity-80">✕ 返回</button>
+    <!-- 5. 聊天頁面 (共用) -->
+    <div id="chat-page" class="hidden fixed inset-0 bg-white z-50 flex flex-col overflow-hidden">
+        <div id="chat-bg" class="patchwork"></div>
+        <nav class="relative z-10 p-5 flex justify-between items-center bg-black/5 backdrop-blur-md text-white">
+            <button onclick="goBack()" class="text-xs">✕ 離開</button>
             <div class="text-center">
-                <h2 id="room-display-name" class="text-sm font-light tracking-widest">房間</h2>
-                <p id="user-display-name" class="text-[10px] opacity-70"></p>
-                <p id="room-id-tag" class="text-[7px] opacity-30"></p>
+                <p id="chat-room-title" class="text-sm font-medium"></p>
+                <p id="chat-room-id" class="text-[7px] opacity-50 uppercase"></p>
             </div>
-            <button onclick="copyLink()" class="bg-white/20 px-3 py-1 rounded-full text-[10px]">邀請分享</button>
+            <div class="w-8"></div>
         </nav>
-
-        <div id="ai-bubble" class="mx-6 mt-4 p-4 bg-white/10 backdrop-blur-md rounded-2xl text-white text-xs font-light z-20 text-center">正在感應情緒環境...</div>
+        <div id="positive-tips" class="relative z-10 m-4 p-3 bg-white/20 backdrop-blur-md rounded-xl text-[10px] text-white text-center"></div>
+        <div id="chat-messages" class="relative z-10 flex-1 overflow-y-auto p-6 space-y-4"></div>
+        <!-- 裝飾品層 -->
+        <div id="room-decorations" class="absolute inset-0 pointer-events-none z-15"></div>
         
-        <div id="chat-content" class="flex-1 overflow-y-auto p-6 space-y-4 z-20"></div>
+        <div class="relative z-10 p-6">
+            <div class="bg-white rounded-full p-2 flex shadow-2xl items-center border">
+                <input id="chat-input" type="text" placeholder="說點什麼..." class="flex-1 bg-transparent border-none text-sm px-4 focus:ring-0">
+                <button onclick="sendMsg()" class="bg-gray-800 text-white px-6 py-2 rounded-full text-xs">送出</button>
+            </div>
+        </div>
+    </div>
 
-        <div id="decor-1" class="decor-item absolute bottom-28 left-8 text-4xl">🪴</div>
-        <div id="decor-2" class="decor-item absolute bottom-28 right-12 text-3xl">🕯️</div>
-
-        <div class="p-6 z-20">
-            <div class="bg-white rounded-[2rem] p-2 flex items-center shadow-2xl">
-                <label class="px-3 cursor-pointer">🖼️<input type="file" class="hidden" onchange="uploadImg(this)"></label>
-                <input id="msg-input" type="text" placeholder="輸入訊息..." class="flex-1 bg-transparent border-none text-sm focus:ring-0">
-                <button onclick="pushMsg()" class="bg-gray-800 text-white px-5 py-2 rounded-full text-xs">送出</button>
+    <!-- 6. 日誌頁面 -->
+    <div id="diary-page" class="p-6 hidden">
+        <button onclick="goBack()" class="mb-6 text-xs text-gray-400">✕ 返回</button>
+        <div class="bg-white rounded-[2.5rem] p-6 shadow-sm">
+            <h3 id="calendar-title" class="text-center font-medium mb-4">2024年 12月</h3>
+            <div class="calendar-grid text-center text-[10px] text-gray-400 mb-2">
+                <div>日</div><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div>
+            </div>
+            <div id="calendar-body" class="calendar-grid"></div>
+            <div class="mt-6 text-center">
+                <p class="text-xs text-gray-400">已連續打卡 <span id="streak-count" class="text-amber-500 font-bold">0</span> 天</p>
             </div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        import { getDatabase, ref, push, onChildAdded, set, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-        // 你提供的最新 Firebase 配置
         const firebaseConfig = {
             apiKey: "AIzaSyBE_KthL9aaKe33VXaJKXKGpc_MV8Pj5Ys",
             authDomain: "mood-base-d5c89.firebaseapp.com",
@@ -115,158 +164,302 @@
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        let userData = { nickname: "", mood: "calm", task1: false, task2: false };
-        let currentRoomID = "";
-
-        // 初始化與暱稱記憶
-        window.addEventListener('load', () => {
-            const savedNick = localStorage.getItem('mood_base_nick');
-            if (savedNick) document.getElementById('user-nickname').value = savedNick;
-            setMood('calm'); // 預設
-        });
-
-        // 綁定到 window 使 HTML onclick 可調用
-        window.setMood = (m) => {
-            userData.mood = m;
-            document.querySelectorAll('.mood-btn').forEach(btn => btn.classList.remove('mood-active'));
-            document.getElementById('m-' + m).classList.add('mood-active');
+        // --- 狀態定義 ---
+        let user = {
+            uid: "",
+            nick: "",
+            coins: 0,
+            moodToday: "",
+            moodEmoji: "",
+            lastCheckIn: "",
+            inventory: [], // 擁有的裝飾品 ID
+            historyRooms: {} // {id: name}
         };
 
-        window.triggerTask = (num) => {
-            let q = num === 1 ? "寫下今天覺得感謝的一件事..." : "說一句鼓勵自己的話...";
-            let ans = prompt(q);
-            if(ans && ans.trim()) {
-                if(num === 1) {
-                    userData.task1 = true;
-                    document.getElementById('task1-btn').innerText = "已領取：植物 🌱";
-                    document.getElementById('task1-btn').style.background = "#9CA3AF";
-                } else {
-                    userData.task2 = true;
-                    document.getElementById('task2-btn').innerText = "已領取：香氛 🕯️";
-                    document.getElementById('task2-btn').style.background = "#9CA3AF";
-                }
-            }
+        let currentRoom = { id: "", name: "", type: "" };
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // --- 商店清單 (30項) ---
+        const shopItems = [
+            {id: 1, name: "多肉植物", icon: "🪴", price: 10},
+            {id: 2, name: "香氛蠟燭", icon: "🕯️", price: 20},
+            {id: 3, name: "懶骨頭", icon: "🛋️", price: 50},
+            {id: 4, name: "落地燈", icon: "💡", price: 30},
+            {id: 5, name: "文竹盆栽", icon: "🌿", price: 15},
+            {id: 6, name: "小圓地毯", icon: "🧶", price: 40},
+            {id: 7, name: "黑膠唱機", icon: "📻", price: 100},
+            {id: 8, name: "向日葵", icon: "🌻", price: 10},
+            {id: 9, name: "加濕器", icon: "💨", price: 45},
+            {id: 10, name: "咖啡機", icon: "☕", price: 80},
+            {id: 11, name: "仙人掌", icon: "🌵", price: 12},
+            {id: 12, name: "掛畫：海", icon: "🖼️", price: 60},
+            {id: 13, name: "小貓坐墊", icon: "🐱", price: 35},
+            {id: 14, name: "永生花", icon: "🌹", price: 70},
+            {id: 15, name: "水晶球", icon: "🔮", price: 90},
+            {id: 16, name: "幾何抱枕", icon: "🟦", price: 25},
+            {id: 17, name: "讀書燈", icon: "🔦", price: 20},
+            {id: 18, name: "風鈴", icon: "🎐", price: 30},
+            {id: 19, name: "玻璃魚缸", icon: "🐟", price: 120},
+            {id: 20, name: "天文望遠鏡", icon: "🔭", price: 300},
+            {id: 21, name: "尤加利葉", icon: "🍃", price: 15},
+            {id: 22, name: "小邊桌", icon: "🏷️", price: 55},
+            {id: 23, name: "月球燈", icon: "🌕", price: 150},
+            {id: 24, name: "吉他", icon: "🎸", price: 200},
+            {id: 25, name: "盆景松柏", icon: "🌲", price: 85},
+            {id: 26, name: "泰迪熊", icon: "🧸", price: 45},
+            {id: 27, name: "薰衣草", icon: "🪻", price: 15},
+            {id: 28, name: "懶人書架", icon: "📚", price: 65},
+            {id: 29, name: "復古相機", icon: "📷", price: 110},
+            {id: 30, name: "極光投影儀", icon: "🌌", price: 500}
+        ];
+
+        const moodData = {
+            good: { tip: "今天心情亮亮的，分享這份光給別人吧！", task: "對路人微笑一下", color: "#A3B18A" },
+            calm: { tip: "平靜是種力量，適合深呼吸與閱讀。", task: "靜坐一分鐘", color: "#91A3B0" },
+            tired: { tip: "累了就休息，不是你的錯。世界會等你。", task: "早點關掉螢幕", color: "#B784A7" },
+            anxious: { tip: "焦慮像雲，會飄過。專注在腳下的觸感。", task: "找一個圓形物體", color: "#D4A5A5" },
+            angry: { tip: "憤怒是守護自己的火，別燒傷了心。", task: "用力握拳再放開", color: "#E07A5F" }
         };
 
-        window.checkAndEnter = (mode, existingRoomID = null) => {
-            const nick = document.getElementById('user-nickname').value.trim();
-            if(!nick) { alert("請先輸入暱稱"); return; }
-            
-            localStorage.setItem('mood_base_nick', nick);
-            userData.nickname = nick;
-
-            // 情緒匹配邏輯：根據心情標籤分配大廳
-            if (existingRoomID) {
-                currentRoomID = existingRoomID;
+        // --- 初始化 ---
+        window.onload = async () => {
+            const savedUid = localStorage.getItem('mood_base_uid');
+            if (!savedUid) {
+                user.uid = "u" + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('mood_base_uid', user.uid);
+                showPage('setup-page');
             } else {
-                if (mode === 'match') currentRoomID = "match-" + userData.mood;
-                else if (mode === 'solo') currentRoomID = "solo-" + Math.random().toString(36).substr(2, 6);
-                else currentRoomID = "room-" + Math.random().toString(36).substr(2, 6);
+                user.uid = savedUid;
+                await loadUserData();
             }
-
-            const newUrl = `${window.location.origin}${window.location.pathname}?mode=${mode}&room=${currentRoomID}`;
-            window.history.pushState({ path: newUrl }, '', newUrl);
-
-            document.getElementById('home-page').classList.add('hidden');
-            document.getElementById('room-page').classList.remove('hidden');
-            
-            updateVisuals(mode);
-            startChat();
+            updateHomeUI();
         };
 
-        function updateVisuals(mode) {
-            const bg = document.getElementById('bg-patchwork');
-            const weather = document.getElementById('weather-layer');
-            const ai = document.getElementById('ai-bubble');
-            
-            let colors = mode === 'solo' ? ['#91A3B0', '#778899'] : (mode === 'match' ? ['#A3B18A', '#588157'] : ['#B784A7', '#D4A5A5']);
-            bg.innerHTML = `<div class="shape-flat w-[120%] h-[60%] top-[-10%] left-[-10%] rotate-3" style="background-color: ${colors[0]}"></div>
-                            <div class="shape-flat w-[100%] h-[50%] bottom-0 right-0 -rotate-2" style="background-color: ${colors[1]}"></div>`;
-
-            weather.innerHTML = "";
-            if(userData.mood === 'tired') {
-                for(let i=0; i<30; i++) {
-                    let d = document.createElement('div'); d.className='rain';
-                    d.style.left = Math.random()*100+'vw'; d.style.animationDelay = Math.random()+'s';
-                    weather.appendChild(d);
-                }
-                ai.innerText = "這裡正在下療癒的小雨。";
-            } else if(userData.mood === 'good') {
-                weather.innerHTML = '<div class="sun-ray"></div>';
-                ai.innerText = "陽光灑在牆上，感覺很溫暖。";
+        async function loadUserData() {
+            const snapshot = await get(ref(db, 'users/' + user.uid));
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                user = { ...user, ...data };
+                if (!user.nick) showPage('setup-page');
+                else showPage('home-page');
             } else {
-                ai.innerText = "平靜的白雲，適合慢慢聊天。";
+                showPage('setup-page');
             }
-
-            document.getElementById('room-display-name').innerText = mode==='match'?"共鳴房間":mode==='solo'?"獨處房間":"好友聚會";
-            document.getElementById('user-display-name').innerText = "@" + userData.nickname;
-            document.getElementById('room-id-tag').innerText = "ID: " + currentRoomID;
-            
-            if(userData.task1) document.getElementById('decor-1').classList.add('decor-show');
-            if(userData.task2) document.getElementById('decor-2').classList.add('decor-show');
         }
 
-        function startChat() {
-            const box = document.getElementById('chat-content');
-            box.innerHTML = "";
-            const roomRef = ref(db, 'chats_stable/' + currentRoomID);
+        // --- 功能函數 ---
 
-            onChildAdded(roomRef, (snap) => {
-                const data = snap.val();
-                const isMe = data.user === userData.nickname;
+        window.confirmNickname = async () => {
+            const nick = document.getElementById('init-nick').value.trim();
+            if (!nick) return alert("請輸入暱稱");
+            user.nick = nick;
+            await set(ref(db, 'users/' + user.uid), user);
+            showPage('home-page');
+            updateHomeUI();
+        };
+
+        window.selectMood = (m, emoji) => {
+            if (user.lastCheckIn === todayStr) return; // 鎖定
+            user.moodToday = m;
+            user.moodEmoji = emoji;
+            document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('mood-active'));
+            document.getElementById('btn-' + m).classList.add('mood-active');
+            document.getElementById('mood-feedback').innerText = moodData[m].tip;
+        };
+
+        window.lockMood = async () => {
+            if (!user.moodToday) return alert("請先選擇一個心情");
+            if (user.lastCheckIn === todayStr) return;
+            
+            user.lastCheckIn = todayStr;
+            // 存入日誌
+            await set(ref(db, `logs/${user.uid}/${todayStr}`), user.moodEmoji);
+            await set(ref(db, 'users/' + user.uid), user);
+            alert("今日心情已記錄，明天見！");
+            updateHomeUI();
+        };
+
+        window.doTask = async (num) => {
+            const taskKey = `task_${num}_${todayStr}`;
+            if (localStorage.getItem(taskKey)) return alert("今天領過囉！");
+            
+            user.coins += 10;
+            localStorage.setItem(taskKey, "done");
+            await set(ref(db, 'users/' + user.uid), user);
+            document.getElementById('task' + num + '-btn').innerText = "已領取 10🪙";
+            updateHomeUI();
+        };
+
+        window.openShop = () => {
+            showPage('shop-page');
+            const grid = document.getElementById('shop-grid');
+            grid.innerHTML = shopItems.map(item => `
+                <div class="shop-item bg-white ${user.inventory.includes(item.id) ? 'opacity-50' : ''}">
+                    <div class="text-2xl mb-1">${item.icon}</div>
+                    <div class="text-[10px] font-bold">${item.name}</div>
+                    <button onclick="buyItem(${item.id}, ${item.price})" 
+                        class="mt-2 text-[9px] px-2 py-1 rounded bg-amber-100 text-amber-700">
+                        ${user.inventory.includes(item.id) ? '已擁有' : item.price + '🪙'}
+                    </button>
+                </div>
+            `).join('');
+        };
+
+        window.buyItem = async (id, price) => {
+            if (user.inventory.includes(id)) return alert("已經買過囉！");
+            if (user.coins < price) return alert("金幣不夠唷！");
+            
+            user.coins -= price;
+            user.inventory.push(id);
+            await set(ref(db, 'users/' + user.uid), user);
+            openShop();
+            updateHomeUI();
+        };
+
+        // --- 房間與聊天 ---
+
+        window.enterMatchRoom = () => {
+            const mood = user.moodToday || 'calm';
+            const roomID = `match-${mood}-${todayStr}`; // 每日刷新
+            enterRoom(roomID, `共鳴大廳 · ${moodData[mood].tip.substr(0,4)}`, 'match');
+        };
+
+        window.createRoom = () => {
+            const name = document.getElementById('new-room-name').value.trim();
+            if (!name) return;
+            const rid = "friend-" + Math.random().toString(36).substr(2, 6);
+            enterRoom(rid, name, 'friend');
+        };
+
+        window.enterRoom = (id, name, type) => {
+            currentRoom = { id, name, type };
+            showPage('chat-page');
+            document.getElementById('chat-room-title').innerText = name;
+            document.getElementById('chat-room-id').innerText = "ID: " + id;
+            
+            // 紀錄歷史
+            user.historyRooms[id] = name;
+            set(ref(db, 'users/' + user.uid), user);
+
+            // 正向提示
+            document.getElementById('positive-tips').innerText = type === 'match' ? "✨ 正向任務：" + moodData[user.moodToday || 'calm'].task : "在這裡，你可以安心說出心事。";
+
+            // 渲染背景
+            const bg = document.getElementById('chat-bg');
+            const color = type === 'match' ? moodData[user.moodToday || 'calm'].color : "#91A3B0";
+            bg.innerHTML = `<div class="shape w-[150%] h-[60%] top-[-10%] -left-10 rotate-3" style="background:${color}"></div>`;
+
+            // 渲染裝飾品 (隨機放置)
+            const decorContainer = document.getElementById('room-decorations');
+            decorContainer.innerHTML = "";
+            user.inventory.forEach(itemId => {
+                const item = shopItems.find(i => i.id === itemId);
+                const div = document.createElement('div');
+                div.className = "absolute text-3xl opacity-80";
+                div.style.left = Math.random() * 80 + 10 + "%";
+                div.style.top = Math.random() * 60 + 20 + "%";
+                div.innerText = item.icon;
+                decorContainer.appendChild(div);
+            });
+
+            startChatSession();
+        };
+
+        function startChatSession() {
+            const box = document.getElementById('chat-messages');
+            box.innerHTML = "";
+            const chatRef = ref(db, 'chats/' + currentRoom.id);
+            onChildAdded(chatRef, (snap) => {
+                const msg = snap.val();
+                const isMe = msg.uid === user.uid;
                 const div = document.createElement('div');
                 div.className = `flex ${isMe ? 'justify-end' : 'justify-start'}`;
-                div.innerHTML = `<div class="max-w-[85%]"><p class="text-[9px] text-white/50 mb-1 ${isMe?'text-right':''}">${data.user}</p>
-                                 <div class="msg-bubble rounded-2xl px-4 py-2 text-sm text-gray-800">${data.content}</div></div>`;
+                div.innerHTML = `
+                    <div class="max-w-[80%]">
+                        <p class="text-[8px] text-white/60 mb-1 ${isMe?'text-right':''}">${msg.nick}</p>
+                        <div class="bg-white/95 rounded-2xl p-3 text-sm shadow-sm">${msg.text}</div>
+                    </div>
+                `;
                 box.appendChild(div);
                 box.scrollTop = box.scrollHeight;
             });
         }
 
-        window.pushMsg = () => {
-            const input = document.getElementById('msg-input');
-            if(!input.value.trim()) return;
-            push(ref(db, 'chats_stable/' + currentRoomID), {
-                user: userData.nickname,
-                content: input.value,
+        window.sendMsg = () => {
+            const input = document.getElementById('chat-input');
+            let text = input.value.trim();
+            if (!text) return;
+
+            // 危險發言偵測
+            const dangerWords = ["死", "殺", "殘", "結束生命", "不想活"];
+            if (dangerWords.some(w => text.includes(w))) {
+                alert("⚠️ 我們很在乎你。\n如果你感到痛苦，請撥打 1925 (安心專線) 或 1995 (生命線)。\n這裡永遠有人願意聽你說。");
+            }
+
+            push(ref(db, 'chats/' + currentRoom.id), {
+                uid: user.uid,
+                nick: user.nick,
+                text: text,
                 time: serverTimestamp()
             });
             input.value = "";
         };
 
-        window.uploadImg = (el) => {
-            if (!el.files[0]) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                push(ref(db, 'chats_stable/' + currentRoomID), {
-                    user: userData.nickname,
-                    content: `<img src="${e.target.result}" class="rounded-xl">`,
-                    time: serverTimestamp()
-                });
-            };
-            reader.readAsDataURL(el.files[0]);
-        };
-
-        window.exitRoom = () => {
-            window.history.pushState({}, '', window.location.pathname);
-            location.reload();
-        };
-
-        window.copyLink = () => {
-            navigator.clipboard.writeText(window.location.href).then(() => alert("連結已複製 ✨"));
-        };
-
-        // 偵測分享連結自動進入
-        const urlParams = new URLSearchParams(window.location.search);
-        const m = urlParams.get('mode');
-        const r = urlParams.get('room');
-        if(m && r) {
-            setTimeout(() => {
-                if(!document.getElementById('user-nickname').value) 
-                    document.getElementById('user-nickname').value = "旅人" + Math.floor(Math.random()*1000);
-                checkAndEnter(m, r);
-            }, 800);
+        // --- 工具 ---
+        function updateHomeUI() {
+            document.getElementById('welcome-msg').innerText = user.nick + "，你好";
+            document.getElementById('coin-balance').innerText = user.coins;
+            document.getElementById('shop-coin-balance').innerText = user.coins;
+            document.getElementById('display-date').innerText = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+            
+            if (user.lastCheckIn === todayStr) {
+                document.getElementById('mood-lock-btn').innerText = "今日已完成簽到 ✨";
+                document.getElementById('mood-lock-btn').disabled = true;
+                selectMood(user.moodToday, user.moodEmoji);
+            }
         }
+
+        window.checkInDiary = async () => {
+            showPage('diary-page');
+            const now = new Date();
+            document.getElementById('calendar-title').innerText = `${now.getFullYear()}年 ${now.getMonth()+1}月`;
+            
+            const logsSnap = await get(ref(db, `logs/${user.uid}`));
+            const logs = logsSnap.val() || {};
+            
+            const body = document.getElementById('calendar-body');
+            body.innerHTML = "";
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+            
+            for (let i = 1; i <= daysInMonth; i++) {
+                const dateKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                const div = document.createElement('div');
+                div.className = "calendar-day";
+                div.innerHTML = logs[dateKey] ? `<span class="text-lg">${logs[dateKey]}</span>` : i;
+                body.appendChild(div);
+            }
+            document.getElementById('streak-count').innerText = Object.keys(logs).length;
+        };
+
+        window.openFriendRoomNav = () => {
+            showPage('friend-nav-page');
+            const historyDiv = document.getElementById('history-rooms');
+            historyDiv.innerHTML = Object.entries(user.historyRooms).map(([id, name]) => `
+                <div onclick="enterRoom('${id}', '${name}', 'friend')" class="p-3 bg-gray-50 rounded-xl flex justify-between cursor-pointer">
+                    <span>${name}</span> <span class="opacity-30">${id}</span>
+                </div>
+            `).join('') || "尚無紀錄";
+        };
+
+        window.showPage = (id) => {
+            ['setup-page', 'home-page', 'shop-page', 'friend-nav-page', 'chat-page', 'diary-page'].forEach(p => {
+                document.getElementById(p).classList.add('hidden');
+            });
+            document.getElementById(id).classList.remove('hidden');
+        };
+
+        window.goBack = () => showPage('home-page');
+
     </script>
 </body>
 </html>
